@@ -1,0 +1,57 @@
+﻿server:
+  port: ${GATEWAY_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${IDP_ISSUER_URI:http://localhost:9090/realms/plataforma-educativa}
+          jwk-set-uri: ${IDP_JWK_SET_URI:http://localhost:9090/realms/plataforma-educativa/protocol/openid-connect/certs}
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: usuarios-service
+              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/usuarios/**
+
+            - id: cursos-service
+              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/cursos/**
+
+            - id: inscripciones-service
+              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/inscripciones/**
+
+            - id: evaluaciones-service
+              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/evaluaciones/**
+
+            - id: pagos-service
+              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/pagos/**
+
+            - id: notificaciones-service
+              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/notificaciones/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
