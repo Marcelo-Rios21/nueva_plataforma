@@ -4,13 +4,14 @@
 
 El sistema corresponde a una plataforma de aprendizaje en línea que permite gestionar usuarios, cursos, inscripciones y evaluaciones. Además, según los requerimientos del caso, la plataforma debe considerar funcionalidades como pagos, notificaciones y autenticación segura.
 
-Actualmente el proyecto está desarrollado como una aplicación Spring Boot centralizada, pero para efectos de la actividad se propone una arquitectura basada en microservicios. Esta propuesta permite separar las responsabilidades principales del sistema y facilita que cada componente pueda mantenerse, escalarse y modificarse de forma independiente.
+Actualmente el proyecto está desarrollado como una aplicación Spring Boot modularizada por dominios. Para efectos de la actividad, se complementa con una arquitectura basada en API Gateway, IDaaS y seguridad JWT. Esta propuesta permite separar las responsabilidades principales del sistema y facilita que cada componente pueda mantenerse, escalarse y modificarse de forma independiente.
 
-## 2. Microservicios propuestos
+## 2. Componentes y microservicios propuestos
 
-Para cubrir los requerimientos del sistema se proponen cinco microservicios principales:
+Para cubrir los requerimientos del sistema se proponen componentes de arquitectura y microservicios principales:
 
-- Auth Service
+- API Gateway
+- IDaaS / Keycloak
 - Course Service
 - Assignment and Evaluation Service
 - Payment Service
@@ -30,11 +31,12 @@ La comunicación propuesta entre microservicios será mediante REST, utilizando 
 
 Se eligió REST porque es una alternativa simple de implementar con Spring Boot, es compatible con herramientas como Postman y permite que los servicios se comuniquen de forma clara mediante endpoints HTTP.
 
-## 5. Responsabilidades de cada microservicio
+## 5. Responsabilidades de cada componente
 
-| Microservicio | Responsabilidad principal | Entidades o datos asociados | Comunicación |
+| Componente | Responsabilidad principal | Entidades o datos asociados | Comunicación |
 |---|---|---|---|
-| Auth Service | Gestiona usuarios, autenticación, roles y recuperación de contraseña. | Usuario, Rol | REST |
+| API Gateway | Centraliza el acceso externo, valida tokens JWT y enruta las solicitudes hacia el backend. | Rutas `/api/**` | HTTP / REST |
+| IDaaS / Keycloak | Gestiona autenticación y emisión de tokens JWT. | Realm, cliente, usuario, token | OAuth2 / OpenID Connect |
 | Course Service | Administra cursos e inscripciones de estudiantes. | Curso, Inscripcion | REST |
 | Assignment and Evaluation Service | Gestiona tareas, evaluaciones, entregas y calificaciones. | Evaluacion, Tarea, Calificacion | REST |
 | Payment Service | Procesa pagos asociados a la inscripción en cursos. | Pago, MetodoPago | REST y servicios externos |
@@ -42,34 +44,25 @@ Se eligió REST porque es una alternativa simple de implementar con Spring Boot,
 
 Esta separación permite que cada servicio tenga una responsabilidad clara. Además, evita que cambios en una funcionalidad afecten directamente a todo el sistema. Por ejemplo, una modificación en la lógica de pagos no debería alterar la gestión de cursos o evaluaciones.
 
-## 6. Diagrama de arquitectura propuesto
+## 6. Diagrama de arquitectura
 
 ```mermaid
 flowchart LR
-    Usuario[Estudiantes y Profesores] --> Frontend[Frontend Web]
+    Usuario[Estudiantes y Profesores] --> Frontend[Frontend Web / Postman]
 
     Frontend --> Gateway[API Gateway]
 
-    Gateway --> Auth[Auth Service]
-    Gateway --> Course[Course Service]
-    Gateway --> Assignment[Assignment and Evaluation Service]
-    Gateway --> Payment[Payment Service]
-    Gateway --> Notification[Notification Service]
+    Gateway --> Keycloak[IDaaS / Keycloak]
+    Gateway --> Backend[Backend Spring Boot]
 
-    Auth --> DBAuth[(BD Usuarios)]
-    Course --> DBCourse[(BD Cursos e Inscripciones)]
-    Assignment --> DBAssignment[(BD Evaluaciones y Tareas)]
-    Payment --> DBPayment[(BD Pagos)]
-    Notification --> DBNotification[(BD Notificaciones)]
+    Backend --> Keycloak
+    Backend --> DB[(Oracle Database)]
+    Backend --> S3[(AWS S3)]
 
-    Course --> Auth
-    Assignment --> Auth
-    Assignment --> Course
-    Payment --> Course
+    Backend --> Course[Course Service]
+    Backend --> Assignment[Assignment and Evaluation Service]
+    Backend --> Payment[Payment Service]
+    Backend --> Notification[Notification Service]
+```
 
-    Course --> Notification
-    Assignment --> Notification
-    Payment --> Notification
-
-    Payment --> ExternalPayment[Servicio externo de pago]
-    ```
+En la implementación actual, el backend Spring Boot concentra la lógica de negocio de los módulos principales, mientras que el API Gateway actúa como punto único de entrada y Keycloak cumple el rol de proveedor de identidad. Esta estructura permite demostrar la integración entre API Gateway, IDaaS y Spring Security, manteniendo el diseño preparado para una futura separación física de los módulos en microservicios independientes.

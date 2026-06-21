@@ -1,0 +1,42 @@
+{
+  "realm": "plataforma-educativa",
+  "enabled": true,
+  "displayName": "Plataforma Educativa",
+  "clients": [
+    {
+      "clientId": "plataforma-client",
+      "name": "Cliente Plataforma Educativa",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://localhost:8081"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "estudiante",
+      "enabled": true,
+      "firstName": "Estudiante",
+      "lastName": "Demo",
+      "email": "estudiante@plataforma.local",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "estudiante123",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
