@@ -1,15 +1,15 @@
 package com.duoc.LearningPlatformValidation.service;
 
-import com.duoc.LearningPlatformValidation.dto.ResumenInscripcionMqMessage;
 import com.duoc.LearningPlatformValidation.model.ResumenCompraMq;
 import com.duoc.LearningPlatformValidation.repository.ResumenCompraMqRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,16 +40,16 @@ public class ResumenCompraMqService {
         }
 
         String jsonMessage = new String(rawMessage.getBody(), StandardCharsets.UTF_8);
-        ResumenInscripcionMqMessage message = convertirJsonAMensaje(jsonMessage);
+        JsonNode json = convertirJson(jsonMessage);
 
         ResumenCompraMq resumen = new ResumenCompraMq();
-        resumen.setInscripcionId(message.getInscripcionId());
-        resumen.setEstudianteId(message.getEstudianteId());
-        resumen.setNumeroResumen(message.getNumeroResumen());
-        resumen.setFechaInscripcion(message.getFechaInscripcion());
-        resumen.setTotal(message.getTotal());
-        resumen.setMetodoPago(message.getMetodoPago());
-        resumen.setEstadoPago(message.getEstadoPago());
+        resumen.setInscripcionId(json.path("inscripcionId").asLong());
+        resumen.setEstudianteId(json.path("estudianteId").asLong());
+        resumen.setNumeroResumen(json.path("numeroResumen").asText());
+        resumen.setFechaInscripcion(LocalDateTime.parse(json.path("fechaInscripcion").asText()));
+        resumen.setTotal(new BigDecimal(json.path("total").asText()));
+        resumen.setMetodoPago(json.path("metodoPago").asText());
+        resumen.setEstadoPago(json.path("estadoPago").asText());
         resumen.setContenidoJson(jsonMessage);
         resumen.setFechaGuardado(LocalDateTime.now());
 
@@ -60,11 +60,11 @@ public class ResumenCompraMqService {
         return resumenCompraMqRepository.findAll();
     }
 
-    private ResumenInscripcionMqMessage convertirJsonAMensaje(String jsonMessage) {
+    private JsonNode convertirJson(String jsonMessage) {
         try {
-            return objectMapper.readValue(jsonMessage, ResumenInscripcionMqMessage.class);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalArgumentException("El mensaje recibido desde RabbitMQ no tiene el formato esperado: " + jsonMessage);
+            return objectMapper.readTree(jsonMessage);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("El mensaje recibido desde RabbitMQ no tiene un JSON valido: " + jsonMessage);
         }
     }
 }
