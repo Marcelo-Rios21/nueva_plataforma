@@ -19,6 +19,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/api/mq/**").permitAll()
+                        .requestMatchers("/api/inscripciones/**").permitAll()
+                        .requestMatchers("/api/cursos/**").permitAll()
+                        .requestMatchers("/api/usuarios/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )
