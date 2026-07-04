@@ -5,10 +5,12 @@ import com.duoc.LearningPlatformValidation.model.ResumenCompraMq;
 import com.duoc.LearningPlatformValidation.repository.ResumenCompraMqRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -31,13 +33,14 @@ public class ResumenCompraMqService {
     }
 
     public ResumenCompraMq consumirYGuardar() {
-        Object rawMessage = rabbitTemplate.receiveAndConvert(queueName);
+        Message rawMessage = rabbitTemplate.receive(queueName);
 
         if (rawMessage == null) {
             throw new IllegalArgumentException("No hay mensajes pendientes en la cola RabbitMQ");
         }
 
-        ResumenInscripcionMqMessage message = convertirMensaje(rawMessage);
+        String jsonMessage = new String(rawMessage.getBody(), StandardCharsets.UTF_8);
+        ResumenInscripcionMqMessage message = convertirJsonAMensaje(jsonMessage);
 
         ResumenCompraMq resumen = new ResumenCompraMq();
         resumen.setInscripcionId(message.getInscripcionId());
@@ -47,7 +50,7 @@ public class ResumenCompraMqService {
         resumen.setTotal(message.getTotal());
         resumen.setMetodoPago(message.getMetodoPago());
         resumen.setEstadoPago(message.getEstadoPago());
-        resumen.setContenidoJson(convertirMensajeAJson(message));
+        resumen.setContenidoJson(jsonMessage);
         resumen.setFechaGuardado(LocalDateTime.now());
 
         return resumenCompraMqRepository.save(resumen);
@@ -57,27 +60,11 @@ public class ResumenCompraMqService {
         return resumenCompraMqRepository.findAll();
     }
 
-    private ResumenInscripcionMqMessage convertirMensaje(Object rawMessage) {
-        if (rawMessage instanceof ResumenInscripcionMqMessage message) {
-            return message;
-        }
-
-        if (rawMessage instanceof String jsonMessage) {
-            try {
-                return objectMapper.readValue(jsonMessage, ResumenInscripcionMqMessage.class);
-            } catch (JsonProcessingException ex) {
-                throw new IllegalArgumentException("El mensaje recibido desde RabbitMQ no tiene el formato esperado");
-            }
-        }
-
-        throw new IllegalArgumentException("El mensaje recibido desde RabbitMQ no tiene el formato esperado");
-    }
-
-    private String convertirMensajeAJson(ResumenInscripcionMqMessage message) {
+    private ResumenInscripcionMqMessage convertirJsonAMensaje(String jsonMessage) {
         try {
-            return objectMapper.writeValueAsString(message);
+            return objectMapper.readValue(jsonMessage, ResumenInscripcionMqMessage.class);
         } catch (JsonProcessingException ex) {
-            throw new IllegalArgumentException("No fue posible convertir el resumen consumido a JSON");
+            throw new IllegalArgumentException("El mensaje recibido desde RabbitMQ no tiene el formato esperado: " + jsonMessage);
         }
     }
 }
