@@ -47,11 +47,26 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-aprendizaje:latest
 
+            docker network create plataforma-network 2>/dev/null || true
+
+            docker rm -f plataforma-rabbitmq 2>/dev/null || true
+
+            docker run -d \
+              --name plataforma-rabbitmq \
+              --restart unless-stopped \
+              --network plataforma-network \
+              -p 5672:5672 \
+              -p 15672:15672 \
+              -e RABBITMQ_DEFAULT_USER='admin' \
+              -e RABBITMQ_DEFAULT_PASS='admin' \
+              rabbitmq:3-management
+
             docker rm -f plataforma-aprendizaje-container 2>/dev/null || true
 
             docker run -d \
               --name plataforma-aprendizaje-container \
               --restart unless-stopped \
+              --network plataforma-network \
               -p 8080:8080 \
               -e DB_URL='${{ secrets.DB_URL }}' \
               -e DB_USERNAME='${{ secrets.DB_USERNAME }}' \
@@ -63,6 +78,10 @@ jobs:
               -e AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}' \
               -e AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' \
               -e AWS_SESSION_TOKEN='${{ secrets.AWS_SESSION_TOKEN }}' \
+              -e RABBITMQ_HOST='plataforma-rabbitmq' \
+              -e RABBITMQ_PORT='5672' \
+              -e RABBITMQ_USERNAME='admin' \
+              -e RABBITMQ_PASSWORD='admin' \
               ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-aprendizaje:latest
 
             docker ps
