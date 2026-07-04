@@ -67,7 +67,7 @@ jobs:
               --name plataforma-aprendizaje-container \
               --restart unless-stopped \
               --network plataforma-network \
-              -p 8080:8080 \
+              -p 8080:8081 \
               -e DB_URL='${{ secrets.DB_URL }}' \
               -e DB_USERNAME='${{ secrets.DB_USERNAME }}' \
               -e DB_PASSWORD='${{ secrets.DB_PASSWORD }}' \
