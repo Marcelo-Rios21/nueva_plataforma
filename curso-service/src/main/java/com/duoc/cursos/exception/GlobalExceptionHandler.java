@@ -1,4 +1,4 @@
-package com.duoc.LearningPlatformValidation.exception;
+package com.duoc.cursos.exception;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -44,23 +44,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(respuesta);
     }
 
-    @ExceptionHandler(ServicioCursosNoDisponibleException.class)
-    public ResponseEntity<Map<String, Object>> manejarServicioCursosNoDisponible(
-            ServicioCursosNoDisponibleException ex,
-            HttpServletRequest request) {
-
-        Map<String, Object> respuesta = crearRespuesta(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "Servicio de cursos no disponible",
-                ex.getMessage(),
-                request
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(respuesta);
-    }
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> manejarErrorGeneral(
             Exception ex,
@@ -73,9 +56,7 @@ public class GlobalExceptionHandler {
                 request
         );
 
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(respuesta);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(respuesta);
     }
 
     private Map<String, Object> crearRespuesta(

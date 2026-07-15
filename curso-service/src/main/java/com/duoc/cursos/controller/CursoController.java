@@ -1,4 +1,4 @@
-package com.duoc.LearningPlatformValidation.controller;
+package com.duoc.cursos.controller;
 
 import java.net.URI;
 import java.util.List;
@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.duoc.LearningPlatformValidation.model.Curso;
-import com.duoc.LearningPlatformValidation.service.CursoService;
+import com.duoc.cursos.model.Curso;
+import com.duoc.cursos.service.CursoService;
 
 @RestController
 @RequestMapping("/api/cursos")
@@ -36,16 +36,29 @@ public class CursoController {
         return ResponseEntity.ok(cursoService.buscarCursoPorId(id));
     }
 
+    @PostMapping("/buscar-por-ids")
+    public ResponseEntity<List<Curso>> buscarCursosPorIds(
+            @RequestBody List<Long> ids) {
+
+        return ResponseEntity.ok(cursoService.buscarCursosPorIds(ids));
+    }
+
     @PostMapping
     public ResponseEntity<Curso> registrarCurso(@RequestBody Curso curso) {
         Curso nuevoCurso = cursoService.registrarCurso(curso);
         URI location = URI.create("/api/cursos/" + nuevoCurso.getId());
+
         return ResponseEntity.created(location).body(nuevoCurso);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Curso> actualizarCurso(@PathVariable Long id, @RequestBody Curso curso) {
-        return ResponseEntity.ok(cursoService.actualizarCurso(id, curso));
+    public ResponseEntity<Curso> actualizarCurso(
+            @PathVariable Long id,
+            @RequestBody Curso curso) {
+
+        return ResponseEntity.ok(
+                cursoService.actualizarCurso(id, curso)
+        );
     }
 
     @DeleteMapping("/{id}")

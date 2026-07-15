@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: ${GATEWAY_PORT:8080}
 
 spring:
@@ -17,13 +17,18 @@ spring:
       server:
         webflux:
           routes:
+            - id: bff-service
+              uri: ${BFF_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/bff/**
+
             - id: usuarios-service
               uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/api/usuarios/**
 
             - id: cursos-service
-              uri: ${BACKEND_SERVICE_URL:http://localhost:8081}
+              uri: ${CURSOS_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/cursos/**
 

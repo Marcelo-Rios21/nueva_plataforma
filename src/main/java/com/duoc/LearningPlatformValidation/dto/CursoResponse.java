@@ -1,38 +1,25 @@
-package com.duoc.LearningPlatformValidation.model;
+package com.duoc.LearningPlatformValidation.dto;
 
 import java.math.BigDecimal;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+public class CursoResponse {
 
-@Entity
-@Table(name = "cursos")
-public class Curso {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false)
     private String nombre;
-
-    @Column(nullable = false)
     private String instructor;
-
-    @Column(nullable = false)
     private String duracion;
-
-    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal costo;
 
-    public Curso() {
+    public CursoResponse() {
     }
 
-    public Curso(Long id, String nombre, String instructor, String duracion, BigDecimal costo) {
+    public CursoResponse(
+            Long id,
+            String nombre,
+            String instructor,
+            String duracion,
+            BigDecimal costo) {
+
         this.id = id;
         this.nombre = nombre;
         this.instructor = instructor;
