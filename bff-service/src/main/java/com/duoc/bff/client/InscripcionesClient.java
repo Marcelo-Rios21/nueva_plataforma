@@ -4,6 +4,9 @@ import java.util.function.Supplier;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -36,6 +39,11 @@ public class InscripcionesClient {
                 () -> restClient
                         .post()
                         .uri("/api/inscripciones")
+                        .headers(headers ->
+                                headers.setBearerAuth(
+                                        obtenerTokenBearer()
+                                )
+                        )
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -54,6 +62,11 @@ public class InscripcionesClient {
                                 "/api/mq/inscripciones/{id}/enviar-resumen",
                                 inscripcionId
                         )
+                        .headers(headers ->
+                                headers.setBearerAuth(
+                                        obtenerTokenBearer()
+                                )
+                        )
                         .retrieve()
                         .body(JsonNode.class),
                 "enviar el resumen a RabbitMQ"
@@ -65,6 +78,11 @@ public class InscripcionesClient {
                 () -> restClient
                         .post()
                         .uri("/api/mq/resumenes/consumir")
+                        .headers(headers ->
+                                headers.setBearerAuth(
+                                        obtenerTokenBearer()
+                                )
+                        )
                         .retrieve()
                         .body(JsonNode.class),
                 "consumir el resumen desde RabbitMQ"
@@ -76,6 +94,11 @@ public class InscripcionesClient {
                 () -> restClient
                         .get()
                         .uri("/api/mq/resumenes")
+                        .headers(headers ->
+                                headers.setBearerAuth(
+                                        obtenerTokenBearer()
+                                )
+                        )
                         .retrieve()
                         .body(JsonNode.class),
                 "consultar los resúmenes guardados"
@@ -115,5 +138,25 @@ public class InscripcionesClient {
                     ex
             );
         }
+    }
+
+    private String obtenerTokenBearer() {
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication
+                instanceof JwtAuthenticationToken jwtAuthentication) {
+
+            return jwtAuthentication
+                    .getToken()
+                    .getTokenValue();
+        }
+
+        throw new IllegalStateException(
+                "No se encontró un token JWT autenticado "
+                        + "para llamar al servicio de inscripciones."
+        );
     }
 }

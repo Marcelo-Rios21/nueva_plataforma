@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+  <meta
+    name="description"
+    content="Frontend de la plataforma educativa protegido con Microsoft Entra ID"
+  >
+  <title>Nueva Plataforma</title>
+</head>
+<body>
+  <div id="app">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Plataforma educativa</p>
+        <h1>Nueva Plataforma</h1>
+        <p class="subtitle">
+          Acceso protegido mediante Microsoft Entra ID
+        </p>
+      </div>
+
+      <span id="session-status" class="status status-offline">
+        Sesión no iniciada
+      </span>
+    </header>
+
+    <main class="layout">
+      <section class="card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">Identidad</p>
+            <h2>Cuenta Microsoft</h2>
+          </div>
+
+          <div class="actions">
+            <button id="login-button" class="button button-primary">
+              Iniciar sesión
+            </button>
+
+            <button
+              id="logout-button"
+              class="button button-secondary"
+              hidden
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+
+        <div id="user-panel" class="user-panel" hidden>
+          <dl class="details">
+            <div>
+              <dt>Nombre</dt>
+              <dd id="user-name">—</dd>
+            </div>
+
+            <div>
+              <dt>Cuenta</dt>
+              <dd id="user-username">—</dd>
+            </div>
+
+            <div>
+              <dt>Audiencia</dt>
+              <dd id="token-audience">—</dd>
+            </div>
+
+            <div>
+              <dt>Scope</dt>
+              <dd id="token-scope">—</dd>
+            </div>
+          </dl>
+
+          <button
+            id="courses-button"
+            class="button button-primary"
+          >
+            Consultar cursos protegidos
+          </button>
+        </div>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">API Gateway</p>
+        <h2>Respuesta de cursos</h2>
+
+        <pre id="api-output" class="output">
+Inicia sesión y consulta el endpoint protegido.
+        </pre>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">Diagnóstico</p>
+        <h2>Estado técnico</h2>
+
+        <pre id="technical-output" class="output">
+Microsoft Entra ID pendiente de autenticación.
+        </pre>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

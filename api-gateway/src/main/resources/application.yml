@@ -9,8 +9,9 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${IDP_ISSUER_URI:http://localhost:9090/realms/plataforma-educativa}
-          jwk-set-uri: ${IDP_JWK_SET_URI:http://localhost:9090/realms/plataforma-educativa/protocol/openid-connect/certs}
+          issuer-uri: ${ENTRA_ISSUER_URI:https://login.microsoftonline.com/0bca00cb-b642-4823-b0d8-b4435e501b77/v2.0}
+          audiences:
+            - "${ENTRA_API_CLIENT_ID:5353f5c6-49a7-45f2-a25f-b77bb6bacf83}"
 
   cloud:
     gateway:

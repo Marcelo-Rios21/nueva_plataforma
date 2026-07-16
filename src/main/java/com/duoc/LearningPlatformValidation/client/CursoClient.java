@@ -5,6 +5,9 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -27,11 +30,18 @@ public class CursoClient {
                 .build();
     }
 
-    public List<CursoResponse> buscarCursosPorIds(List<Long> ids) {
+    public List<CursoResponse> buscarCursosPorIds(
+            List<Long> ids) {
+
         try {
             List<CursoResponse> cursos = restClient
                     .post()
                     .uri("/api/cursos/buscar-por-ids")
+                    .headers(headers ->
+                            headers.setBearerAuth(
+                                    obtenerTokenBearer()
+                            )
+                    )
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(ids)
                     .retrieve()
@@ -57,5 +67,25 @@ public class CursoClient {
                     ex
             );
         }
+    }
+
+    private String obtenerTokenBearer() {
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication
+                instanceof JwtAuthenticationToken jwtAuthentication) {
+
+            return jwtAuthentication
+                    .getToken()
+                    .getTokenValue();
+        }
+
+        throw new IllegalStateException(
+                "No se encontró un token JWT autenticado "
+                        + "para llamar al servicio de cursos."
+        );
     }
 }
