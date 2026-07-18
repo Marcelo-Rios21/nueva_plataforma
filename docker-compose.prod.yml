@@ -1,0 +1,130 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: plataforma-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - plataforma-network
+
+  curso-service:
+    image: ${DOCKERHUB_USERNAME}/plataforma-curso-service:${IMAGE_TAG:-latest}
+    container_name: plataforma-curso-service
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8082"
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DRIVER: ${DB_DRIVER:-oracle.jdbc.OracleDriver}
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
+    networks:
+      - plataforma-network
+
+  inscripciones-service:
+    image: ${DOCKERHUB_USERNAME}/plataforma-inscripciones-service:${IMAGE_TAG:-latest}
+    container_name: plataforma-inscripciones-service
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      curso-service:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8081"
+
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DRIVER: ${DB_DRIVER:-oracle.jdbc.OracleDriver}
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+
+      CURSOS_SERVICE_URL: http://curso-service:8082
+
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
+    networks:
+      - plataforma-network
+
+  bff-service:
+    image: ${DOCKERHUB_USERNAME}/plataforma-bff-service:${IMAGE_TAG:-latest}
+    container_name: plataforma-bff-service
+    restart: unless-stopped
+    depends_on:
+      inscripciones-service:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8083"
+      INSCRIPCIONES_SERVICE_URL: http://inscripciones-service:8081
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
+    networks:
+      - plataforma-network
+
+  api-gateway:
+    image: ${DOCKERHUB_USERNAME}/plataforma-api-gateway:${IMAGE_TAG:-latest}
+    container_name: plataforma-api-gateway
+    restart: unless-stopped
+    depends_on:
+      bff-service:
+        condition: service_started
+      curso-service:
+        condition: service_started
+      inscripciones-service:
+        condition: service_started
+    environment:
+      GATEWAY_PORT: "8080"
+      BFF_SERVICE_URL: http://bff-service:8083
+      BACKEND_SERVICE_URL: http://inscripciones-service:8081
+      CURSOS_SERVICE_URL: http://curso-service:8082
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
+    ports:
+      - "8080:8080"
+    networks:
+      - plataforma-network
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME}/plataforma-frontend:${IMAGE_TAG:-latest}
+    container_name: plataforma-frontend
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_started
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-http://api-gateway:8080}
+      NGINX_ENVSUBST_FILTER: ^API_UPSTREAM$
+    ports:
+      - "5173:80"
+    networks:
+      - plataforma-network
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  plataforma-network:

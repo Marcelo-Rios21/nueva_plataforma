@@ -1,9 +1,13 @@
-name: Build and Deploy to EC2
+name: Build and Deploy Platform
 
 on:
   push:
     branches:
       - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-deploy:
@@ -11,18 +15,26 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: "21"
+          cache: maven
 
-      - name: Build Spring Boot project
+      - name: Validate Java projects
         run: |
           chmod +x ./mvnw
+
           ./mvnw clean package -DskipTests
+          ./mvnw -f curso-service/pom.xml clean package -DskipTests
+          ./mvnw -f bff-service/pom.xml clean package -DskipTests
+          ./mvnw -f api-gateway/pom.xml clean package -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
         uses: docker/login-action@v4
@@ -30,59 +42,183 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-aprendizaje:latest .
+      - name: Build and push inscripciones-service
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-inscripciones-service:latest
 
-      - name: Push Docker image to Docker Hub
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-aprendizaje:latest
+      - name: Build and push curso-service
+        uses: docker/build-push-action@v7
+        with:
+          context: ./curso-service
+          file: ./curso-service/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-curso-service:latest
 
-      - name: Configure SSH key
+      - name: Build and push bff-service
+        uses: docker/build-push-action@v7
+        with:
+          context: ./bff-service
+          file: ./bff-service/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-bff-service:latest
+
+      - name: Build and push api-gateway
+        uses: docker/build-push-action@v7
+        with:
+          context: ./api-gateway
+          file: ./api-gateway/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-api-gateway:latest
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-frontend:latest
+          build-args: |
+            VITE_ENTRA_TENANT_ID=${{ secrets.ENTRA_TENANT_ID }}
+            VITE_ENTRA_SPA_CLIENT_ID=${{ secrets.ENTRA_SPA_CLIENT_ID }}
+            VITE_ENTRA_API_SCOPE=${{ secrets.ENTRA_API_SCOPE }}
+            VITE_API_BASE_URL=/api
+
+      - name: Create production environment file
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_DRIVER: ${{ secrets.DB_DRIVER }}
+
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+          RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+
+          ENTRA_ISSUER_URI: ${{ secrets.ENTRA_ISSUER_URI }}
+          ENTRA_API_CLIENT_ID: ${{ secrets.ENTRA_API_CLIENT_ID }}
+
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          names = [
+              "DOCKERHUB_USERNAME",
+              "DB_URL",
+              "DB_USERNAME",
+              "DB_PASSWORD",
+              "DB_DRIVER",
+              "AWS_REGION",
+              "AWS_S3_BUCKET",
+              "AWS_ACCESS_KEY_ID",
+              "AWS_SECRET_ACCESS_KEY",
+              "AWS_SESSION_TOKEN",
+              "RABBITMQ_USERNAME",
+              "RABBITMQ_PASSWORD",
+              "ENTRA_ISSUER_URI",
+              "ENTRA_API_CLIENT_ID",
+          ]
+
+          missing = [
+              name
+              for name in names
+              if not os.environ.get(name, "").strip()
+          ]
+
+          if missing:
+              raise SystemExit(
+                  "Faltan secretos requeridos: " + ", ".join(missing)
+              )
+
+          values = {
+              name: os.environ[name]
+              for name in names
+          }
+
+          values["IMAGE_TAG"] = "latest"
+          values["API_UPSTREAM"] = "http://api-gateway:8080"
+
+          with open("deploy.env", "w", encoding="utf-8") as output:
+              for name, value in values.items():
+                  output.write(
+                      f"{name}={json.dumps(value)}\n"
+                  )
+          PY
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key.pem
           chmod 600 ~/.ssh/ec2_key.pem
 
-      - name: Deploy on EC2
+      - name: Copy deployment files to EC2
+        shell: bash
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-aprendizaje:latest
+          ssh \
+            -o StrictHostKeyChecking=no \
+            -i ~/.ssh/ec2_key.pem \
+            "$EC2_USER@$EC2_HOST" \
+            "mkdir -p ~/plataforma"
 
-            docker network create plataforma-network 2>/dev/null || true
+          scp \
+            -o StrictHostKeyChecking=no \
+            -i ~/.ssh/ec2_key.pem \
+            docker-compose.prod.yml \
+            deploy.env \
+            "$EC2_USER@$EC2_HOST:~/plataforma/"
 
-            docker rm -f plataforma-rabbitmq 2>/dev/null || true
+      - name: Deploy on EC2
+        shell: bash
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          ssh \
+            -o StrictHostKeyChecking=no \
+            -i ~/.ssh/ec2_key.pem \
+            "$EC2_USER@$EC2_HOST" << 'EOF'
+              set -e
 
-            docker run -d \
-              --name plataforma-rabbitmq \
-              --restart unless-stopped \
-              --network plataforma-network \
-              -p 5672:5672 \
-              -p 15672:15672 \
-              -e RABBITMQ_DEFAULT_USER='${{ secrets.RABBITMQ_USERNAME }}' \
-              -e RABBITMQ_DEFAULT_PASS='${{ secrets.RABBITMQ_PASSWORD }}' \
-              rabbitmq:3-management
+              cd ~/plataforma
 
-            docker rm -f plataforma-aprendizaje-container 2>/dev/null || true
+              mv deploy.env .env
+              chmod 600 .env
 
-            docker run -d \
-              --name plataforma-aprendizaje-container \
-              --restart unless-stopped \
-              --network plataforma-network \
-              -p 8080:8081 \
-              -e DB_URL='${{ secrets.DB_URL }}' \
-              -e DB_USERNAME='${{ secrets.DB_USERNAME }}' \
-              -e DB_PASSWORD='${{ secrets.DB_PASSWORD }}' \
-              -e DB_DRIVER='${{ secrets.DB_DRIVER }}' \
-              -e SERVER_PORT='8081' \
-              -e AWS_REGION='${{ secrets.AWS_REGION }}' \
-              -e AWS_S3_BUCKET='${{ secrets.AWS_S3_BUCKET }}' \
-              -e AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}' \
-              -e AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' \
-              -e AWS_SESSION_TOKEN='${{ secrets.AWS_SESSION_TOKEN }}' \
-              -e RABBITMQ_HOST='plataforma-rabbitmq' \
-              -e RABBITMQ_PORT='5672' \
-              -e RABBITMQ_USERNAME='${{ secrets.RABBITMQ_USERNAME }}' \
-              -e RABBITMQ_PASSWORD='${{ secrets.RABBITMQ_PASSWORD }}' \
-              ${{ secrets.DOCKERHUB_USERNAME }}/plataforma-aprendizaje:latest
+              docker compose \
+                -f docker-compose.prod.yml \
+                pull
 
-            docker ps
+              docker compose \
+                -f docker-compose.prod.yml \
+                up -d \
+                --remove-orphans
+
+              docker image prune -f
+
+              docker compose \
+                -f docker-compose.prod.yml \
+                ps
           EOF

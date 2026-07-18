@@ -1,30 +1,153 @@
 services:
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.6.3
-    container_name: plataforma-keycloak
-    command: start-dev --import-realm
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: http://localhost:9090
-      KC_HOSTNAME_STRICT: "false"
-      KC_HTTP_ENABLED: "true"
-    ports:
-      - "9090:8080"
-    volumes:
-      - ./keycloak/plataforma-educativa-realm.json:/opt/keycloak/data/import/plataforma-educativa-realm.json:ro
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: plataforma-rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - plataforma-network
+
+  curso-service:
+    build:
+      context: ./curso-service
+    image: plataforma-curso-service:local
+    container_name: plataforma-curso-service
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8082"
+      DB_URL: ${DB_URL:-}
+      DB_USERNAME: ${DB_USERNAME:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_DRIVER: ${DB_DRIVER:-oracle.jdbc.OracleDriver}
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI:-https://login.microsoftonline.com/0bca00cb-b642-4823-b0d8-b4435e501b77/v2.0}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID:-5353f5c6-49a7-45f2-a25f-b77bb6bacf83}
+    ports:
+      - "127.0.0.1:8082:8082"
+    networks:
+      - plataforma-network
+
+  inscripciones-service:
+    build:
+      context: .
+    image: plataforma-inscripciones-service:local
+    container_name: plataforma-inscripciones-service
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      curso-service:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8081"
+
+      DB_URL: ${DB_URL:-}
+      DB_USERNAME: ${DB_USERNAME:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_DRIVER: ${DB_DRIVER:-oracle.jdbc.OracleDriver}
+
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+
+      CURSOS_SERVICE_URL: http://curso-service:8082
+
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-admin}
+
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI:-https://login.microsoftonline.com/0bca00cb-b642-4823-b0d8-b4435e501b77/v2.0}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID:-5353f5c6-49a7-45f2-a25f-b77bb6bacf83}
+    ports:
+      - "127.0.0.1:8081:8081"
+    networks:
+      - plataforma-network
+
+  bff-service:
+    build:
+      context: ./bff-service
+    image: plataforma-bff-service:local
+    container_name: plataforma-bff-service
+    restart: unless-stopped
+    depends_on:
+      inscripciones-service:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8083"
+      INSCRIPCIONES_SERVICE_URL: http://inscripciones-service:8081
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI:-https://login.microsoftonline.com/0bca00cb-b642-4823-b0d8-b4435e501b77/v2.0}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID:-5353f5c6-49a7-45f2-a25f-b77bb6bacf83}
+    ports:
+      - "127.0.0.1:8083:8083"
+    networks:
+      - plataforma-network
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    image: plataforma-api-gateway:local
+    container_name: plataforma-api-gateway
+    restart: unless-stopped
+    depends_on:
+      bff-service:
+        condition: service_started
+      curso-service:
+        condition: service_started
+      inscripciones-service:
+        condition: service_started
+    environment:
+      GATEWAY_PORT: "8080"
+      BFF_SERVICE_URL: http://bff-service:8083
+      BACKEND_SERVICE_URL: http://inscripciones-service:8081
+      CURSOS_SERVICE_URL: http://curso-service:8082
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI:-https://login.microsoftonline.com/0bca00cb-b642-4823-b0d8-b4435e501b77/v2.0}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID:-5353f5c6-49a7-45f2-a25f-b77bb6bacf83}
+    ports:
+      - "8080:8080"
+    networks:
+      - plataforma-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_ENTRA_TENANT_ID: ${VITE_ENTRA_TENANT_ID:-0bca00cb-b642-4823-b0d8-b4435e501b77}
+        VITE_ENTRA_SPA_CLIENT_ID: ${VITE_ENTRA_SPA_CLIENT_ID:-4ded58dd-43ea-4c99-bc40-9ab5ec7c0235}
+        VITE_ENTRA_API_SCOPE: ${VITE_ENTRA_API_SCOPE:-https://marcelorios2026.onmicrosoft.com/5353f5c6-49a7-45f2-a25f-b77bb6bacf83/access_as_user}
+        VITE_API_BASE_URL: /api
+    image: plataforma-frontend:local
+    container_name: plataforma-frontend
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_started
+    environment:
+      API_UPSTREAM: http://api-gateway:8080
+      NGINX_ENVSUBST_FILTER: ^API_UPSTREAM$
+    ports:
+      - "5173:80"
+    networks:
+      - plataforma-network
 
 volumes:
   rabbitmq_data:
+
+networks:
+  plataforma-network:
+    name: plataforma-network
