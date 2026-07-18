@@ -241,6 +241,18 @@ jobs:
                 -f docker-compose.prod.yml \
                 pull
 
+              echo "Eliminando contenedores de despliegues anteriores..."
+
+              docker rm -f \
+                plataforma-rabbitmq \
+                plataforma-aprendizaje-container \
+                plataforma-inscripciones-service \
+                plataforma-curso-service \
+                plataforma-bff-service \
+                plataforma-api-gateway \
+                plataforma-frontend \
+                2>/dev/null || true
+
               docker compose \
                 -f docker-compose.prod.yml \
                 up -d \
