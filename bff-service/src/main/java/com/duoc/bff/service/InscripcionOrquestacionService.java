@@ -3,12 +3,13 @@ package com.duoc.bff.service;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.duoc.bff.client.InscripcionesClient;
 import com.duoc.bff.dto.InscripcionRequest;
 import com.duoc.bff.exception.RespuestaInvalidaException;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 @Service
 public class InscripcionOrquestacionService {
@@ -65,6 +66,32 @@ public class InscripcionOrquestacionService {
 
     public JsonNode listarResumenesRabbitMq() {
         return inscripcionesClient.listarResumenesRabbitMq();
+    }
+
+    public JsonNode subirResumenS3(Long inscripcionId) {
+        validarInscripcionId(inscripcionId);
+
+        return inscripcionesClient.subirResumenS3(
+                inscripcionId
+        );
+    }
+
+    public ResponseEntity<byte[]> descargarResumenS3(
+            Long inscripcionId) {
+
+        validarInscripcionId(inscripcionId);
+
+        return inscripcionesClient.descargarResumenS3(
+                inscripcionId
+        );
+    }
+
+    private void validarInscripcionId(Long inscripcionId) {
+        if (inscripcionId == null || inscripcionId <= 0) {
+            throw new IllegalArgumentException(
+                    "El ID de inscripción debe ser mayor que cero."
+            );
+        }
     }
 
     private void validarRequest(InscripcionRequest request) {

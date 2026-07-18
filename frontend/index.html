@@ -83,6 +83,124 @@
         </div>
       </section>
 
+      <section id="operations-card" class="card" hidden>
+        <p class="eyebrow">Flujo integrado</p>
+        <h2>Inscripción, RabbitMQ y almacenamiento S3</h2>
+
+        <p class="section-note">
+          Este formulario utiliza el BFF para crear la inscripción y
+          publicar automáticamente su resumen en RabbitMQ.
+        </p>
+
+        <form id="inscription-form" class="form-grid">
+          <label class="field">
+            <span>ID del estudiante</span>
+            <input
+              id="student-id"
+              type="number"
+              min="1"
+              value="1"
+              required
+            >
+          </label>
+
+          <label class="field">
+            <span>IDs de cursos</span>
+            <input
+              id="course-ids"
+              type="text"
+              value="1"
+              placeholder="Ejemplo: 1, 2"
+              required
+            >
+          </label>
+
+          <label class="field">
+            <span>Método de pago</span>
+            <input
+              id="payment-method"
+              type="text"
+              value="TARJETA"
+              required
+            >
+          </label>
+
+          <div class="button-row form-span">
+            <button
+              id="create-inscription-button"
+              type="submit"
+              class="button button-primary"
+            >
+              Crear inscripción y publicar en RabbitMQ
+            </button>
+          </div>
+        </form>
+
+        <div class="operations-grid">
+          <div class="operation-panel">
+            <p class="eyebrow">RabbitMQ</p>
+            <h3>Consumidor y registros</h3>
+
+            <div class="button-row">
+              <button
+                id="consume-mq-button"
+                type="button"
+                class="button button-primary"
+              >
+                Consumir mensaje
+              </button>
+
+              <button
+                id="list-mq-button"
+                type="button"
+                class="button button-secondary"
+              >
+                Listar mensajes guardados
+              </button>
+            </div>
+          </div>
+
+          <div class="operation-panel">
+            <p class="eyebrow">AWS S3</p>
+            <h3>Resumen de inscripción</h3>
+
+            <label class="field">
+              <span>ID de inscripción</span>
+              <input
+                id="s3-inscription-id"
+                type="number"
+                min="1"
+                placeholder="Se completa al crear la inscripción"
+              >
+            </label>
+
+            <div class="button-row">
+              <button
+                id="upload-s3-button"
+                type="button"
+                class="button button-primary"
+              >
+                Subir resumen a S3
+              </button>
+
+              <button
+                id="download-s3-button"
+                type="button"
+                class="button button-secondary"
+              >
+                Descargar desde S3
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="result-title">Resultado del flujo</h3>
+
+        <pre id="workflow-output" class="output">
+Selecciona una operación para comenzar.
+        </pre>
+      </section>
+
       <section class="card">
         <p class="eyebrow">API Gateway</p>
         <h2>Respuesta de cursos</h2>

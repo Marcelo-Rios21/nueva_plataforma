@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -16,7 +17,7 @@ import com.duoc.bff.dto.InscripcionRequest;
 import com.duoc.bff.exception.RespuestaInvalidaException;
 import com.duoc.bff.exception.ServicioInternoException;
 import com.duoc.bff.exception.ServicioNoDisponibleException;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 @Component
 public class InscripcionesClient {
@@ -103,6 +104,62 @@ public class InscripcionesClient {
                         .body(JsonNode.class),
                 "consultar los resúmenes guardados"
         );
+    }
+
+    public JsonNode subirResumenS3(
+            Long inscripcionId) {
+
+        return ejecutarLlamada(
+                () -> restClient
+                        .post()
+                        .uri(
+                                "/api/inscripciones/{id}/resumen/s3",
+                                inscripcionId
+                        )
+                        .headers(headers ->
+                                headers.setBearerAuth(
+                                        obtenerTokenBearer()
+                                )
+                        )
+                        .retrieve()
+                        .body(JsonNode.class),
+                "subir el resumen de inscripción a S3"
+        );
+    }
+
+    public ResponseEntity<byte[]> descargarResumenS3(
+            Long inscripcionId) {
+
+        try {
+            return restClient
+                    .get()
+                    .uri(
+                            "/api/inscripciones/{id}/resumen/s3/download",
+                            inscripcionId
+                    )
+                    .headers(headers ->
+                            headers.setBearerAuth(
+                                    obtenerTokenBearer()
+                            )
+                    )
+                    .retrieve()
+                    .toEntity(byte[].class);
+        }
+        catch (RestClientResponseException ex) {
+            throw new ServicioInternoException(
+                    "El servicio de inscripciones rechazó "
+                            + "la descarga del resumen desde S3.",
+                    ex.getStatusCode().value(),
+                    ex
+            );
+        }
+        catch (RestClientException ex) {
+            throw new ServicioNoDisponibleException(
+                    "No fue posible descargar el resumen "
+                            + "de inscripción desde S3.",
+                    ex
+            );
+        }
     }
 
     private JsonNode ejecutarLlamada(

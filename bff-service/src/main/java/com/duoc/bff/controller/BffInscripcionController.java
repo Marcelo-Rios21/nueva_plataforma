@@ -5,6 +5,7 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.duoc.bff.dto.InscripcionRequest;
 import com.duoc.bff.service.InscripcionOrquestacionService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 @RestController
 @RequestMapping("/api/bff")
@@ -38,6 +39,22 @@ public class BffInscripcionController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(respuesta);
+    }
+
+    @PostMapping("/inscripciones/{id}/resumen/s3")
+    public ResponseEntity<JsonNode> subirResumenS3(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                orquestacionService.subirResumenS3(id)
+        );
+    }
+
+    @GetMapping("/inscripciones/{id}/resumen/s3/download")
+    public ResponseEntity<byte[]> descargarResumenS3(
+            @PathVariable Long id) {
+
+        return orquestacionService.descargarResumenS3(id);
     }
 
     @PostMapping("/mq/resumenes/consumir")
