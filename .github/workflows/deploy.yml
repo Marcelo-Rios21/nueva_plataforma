@@ -202,6 +202,36 @@ jobs:
             "$EC2_USER@$EC2_HOST" << 'EOF'
               set -e
 
+              if ! docker compose version >/dev/null 2>&1; then
+                echo "Docker Compose no esta instalado. Instalando complemento..."
+
+                DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
+                mkdir -p "$DOCKER_CONFIG/cli-plugins"
+
+                ARCH="$(uname -m)"
+
+                case "$ARCH" in
+                  x86_64)
+                    COMPOSE_ARCH="x86_64"
+                    ;;
+                  aarch64|arm64)
+                    COMPOSE_ARCH="aarch64"
+                    ;;
+                  *)
+                    echo "Arquitectura no soportada: $ARCH"
+                    exit 1
+                    ;;
+                esac
+
+                curl -fsSL \
+                  "https://github.com/docker/compose/releases/download/v5.1.2/docker-compose-linux-${COMPOSE_ARCH}" \
+                  -o "$DOCKER_CONFIG/cli-plugins/docker-compose"
+
+                chmod +x "$DOCKER_CONFIG/cli-plugins/docker-compose"
+              fi
+
+              docker compose version
+
               cd ~/plataforma
 
               mv deploy.env .env
