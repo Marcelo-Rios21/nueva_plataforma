@@ -4,65 +4,74 @@
 
 El sistema corresponde a una plataforma de aprendizaje en línea que permite gestionar usuarios, cursos, inscripciones y evaluaciones. Además, según los requerimientos del caso, la plataforma debe considerar funcionalidades como pagos, notificaciones y autenticación segura.
 
-Actualmente el proyecto está desarrollado como una aplicación Spring Boot modularizada por dominios. Para efectos de la actividad, se complementa con una arquitectura basada en API Gateway, IDaaS y seguridad JWT. Esta propuesta permite separar las responsabilidades principales del sistema y facilita que cada componente pueda mantenerse, escalarse y modificarse de forma independiente.
+La plataforma utiliza una arquitectura distribuida compuesta por un frontend SPA, Azure API Management, API Gateway, BFF y servicios Spring Boot independientes. Microsoft Entra ID proporciona autenticación OAuth2/JWT, mientras RabbitMQ permite la comunicación asíncrona de los resúmenes de inscripción.
 
-## 2. Componentes y microservicios propuestos
+## 2. Componentes y microservicios
 
-Para cubrir los requerimientos del sistema se proponen componentes de arquitectura y microservicios principales:
+La plataforma se compone de los siguientes servicios y componentes principales:
 
+- Frontend SPA
+- Azure API Management
 - API Gateway
-- IDaaS / Keycloak
-- Course Service
-- Assignment and Evaluation Service
-- Payment Service
-- Notification Service
+- Microsoft Entra ID
+- BFF Service
+- Curso Service
+- Inscripciones Service
+- RabbitMQ
+- Oracle Cloud Database
+- AWS S3
 
 Cada uno de estos servicios se encarga de una parte específica de la plataforma, evitando concentrar toda la lógica en un único componente.
 
 ## 3. Justificación general
 
-La división en microservicios permite separar las funcionalidades críticas del sistema. Por ejemplo, la autenticación queda aislada de la gestión de cursos, y el procesamiento de pagos queda separado de las evaluaciones. Esto es importante porque no todos los módulos tienen la misma carga ni los mismos riesgos.
+La división en servicios separa las responsabilidades principales. Microsoft Entra ID gestiona la identidad, Curso Service administra los cursos, Inscripciones Service mantiene la lógica transaccional y el BFF coordina los flujos que requieren combinar varios servicios.
 
-Además, esta arquitectura permite que en el futuro cada servicio pueda tener su propia base de datos, sus propias reglas de negocio y sus propios mecanismos de seguridad.
+Cada servicio mantiene sus propias reglas de negocio y configuraciones, mientras el acceso se centraliza mediante Azure API Management y API Gateway.
 
 ## 4. Comunicación entre servicios
 
-La comunicación propuesta entre microservicios será mediante REST, utilizando intercambio de datos en formato JSON.
+La comunicación síncrona entre servicios utiliza REST y JSON. El transporte asíncrono de resúmenes de inscripción se realiza mediante RabbitMQ.
 
-Se eligió REST porque es una alternativa simple de implementar con Spring Boot, es compatible con herramientas como Postman y permite que los servicios se comuniquen de forma clara mediante endpoints HTTP.
+REST permite exponer operaciones HTTP protegidas con OAuth2/JWT, mientras RabbitMQ desacopla la publicación, el consumo y la persistencia de los resúmenes.
 
 ## 5. Responsabilidades de cada componente
 
 | Componente | Responsabilidad principal | Entidades o datos asociados | Comunicación |
 |---|---|---|---|
-| API Gateway | Centraliza el acceso externo, valida tokens JWT y enruta las solicitudes hacia el backend. | Rutas `/api/**` | HTTP / REST |
-| IDaaS / Keycloak | Gestiona autenticación y emisión de tokens JWT. | Realm, cliente, usuario, token | OAuth2 / OpenID Connect |
-| Course Service | Administra cursos e inscripciones de estudiantes. | Curso, Inscripcion | REST |
-| Assignment and Evaluation Service | Gestiona tareas, evaluaciones, entregas y calificaciones. | Evaluacion, Tarea, Calificacion | REST |
-| Payment Service | Procesa pagos asociados a la inscripción en cursos. | Pago, MetodoPago | REST y servicios externos |
-| Notification Service | Envía avisos automáticos sobre cursos, evaluaciones, tareas y pagos. | Notificacion | REST o eventos |
+| Frontend SPA | Proporciona la interfaz web y obtiene tokens mediante MSAL. | Sesión y operaciones del usuario | OAuth2 / REST |
+| Azure API Management | Publica la API, valida tokens y reenvía solicitudes al API Gateway. | Operaciones GET, POST, PUT y DELETE | HTTPS / REST |
+| API Gateway | Centraliza y enruta las solicitudes hacia los servicios internos. | Rutas `/api/**` | HTTP / REST |
+| Microsoft Entra ID | Gestiona autenticación y emisión de tokens OAuth2/JWT. | Aplicaciones registradas, usuarios, scopes y tokens | OAuth2 / OpenID Connect |
+| Curso Service | Administra el catálogo y CRUD de cursos. | Curso | REST |
+| Inscripciones Service | Gestiona usuarios, inscripciones, evaluaciones, pagos, notificaciones, Oracle y S3. | Usuario, Inscripcion, Evaluacion, Pago, Notificacion | REST / JPA / S3 |
+| BFF Service | Coordina la creación de inscripciones y la publicación y consumo de resúmenes. | DTO de inscripción y resumen | REST |
+| RabbitMQ | Transporta los resúmenes entre productor y consumidor. | Cola, exchange y routing key | AMQP |
+| Oracle Cloud Database | Almacena información transaccional y resúmenes consumidos. | Tablas de la plataforma | JDBC / JPA |
+| AWS S3 | Almacena los archivos físicos de los resúmenes de inscripción. | Objetos organizados por número de resumen | AWS SDK |
 
-Esta separación permite que cada servicio tenga una responsabilidad clara. Además, evita que cambios en una funcionalidad afecten directamente a todo el sistema. Por ejemplo, una modificación en la lógica de pagos no debería alterar la gestión de cursos o evaluaciones.
+Esta separación mantiene responsabilidades claras y permite modificar o desplegar cada componente sin concentrar toda la lógica en un único proceso.
 
 ## 6. Diagrama de arquitectura
 
 ```mermaid
 flowchart LR
-    Usuario[Estudiantes y Profesores] --> Frontend[Frontend Web / Postman]
+    Usuario[Usuario] --> Frontend[Frontend SPA]
+    Frontend --> Entra[Microsoft Entra ID]
+    Frontend --> APIM[Azure API Management]
 
-    Frontend --> Gateway[API Gateway]
+    APIM --> Gateway[API Gateway]
+    Gateway --> BFF[BFF Service]
+    Gateway --> Cursos[Curso Service]
+    Gateway --> Inscripciones[Inscripciones Service]
 
-    Gateway --> Keycloak[IDaaS / Keycloak]
-    Gateway --> Backend[Backend Spring Boot]
+    BFF --> Cursos
+    BFF --> Inscripciones
 
-    Backend --> Keycloak
-    Backend --> DB[(Oracle Database)]
-    Backend --> S3[(AWS S3)]
-
-    Backend --> Course[Course Service]
-    Backend --> Assignment[Assignment and Evaluation Service]
-    Backend --> Payment[Payment Service]
-    Backend --> Notification[Notification Service]
+    Inscripciones --> RabbitMQ[(RabbitMQ)]
+    RabbitMQ --> Inscripciones
+    Inscripciones --> Oracle[(Oracle Cloud Database)]
+    Inscripciones --> S3[(AWS S3)]
 ```
 
-En la implementación actual, el backend Spring Boot concentra la lógica de negocio de los módulos principales, mientras que el API Gateway actúa como punto único de entrada y Keycloak cumple el rol de proveedor de identidad. Esta estructura permite demostrar la integración entre API Gateway, IDaaS y Spring Security, manteniendo el diseño preparado para una futura separación física de los módulos en microservicios independientes.
+El frontend obtiene los tokens de acceso mediante Microsoft Entra ID y consume las operaciones publicadas en Azure API Management. API Management valida el token y reenvía las solicitudes al API Gateway, que las dirige hacia el BFF, Curso Service o Inscripciones Service. El servicio de inscripciones se comunica con RabbitMQ, Oracle Cloud Database y AWS S3.

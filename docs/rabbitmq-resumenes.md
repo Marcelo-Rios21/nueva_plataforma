@@ -1,10 +1,10 @@
 # Integración RabbitMQ para resúmenes de inscripción
 
-## Estado actual
+## Descripción
 
 La aplicación incorpora una integración con RabbitMQ para desacoplar el proceso de generación y persistencia de resúmenes de inscripción.
 
-Actualmente, el sistema permite tomar una inscripción existente, generar su resumen a partir de la boleta de inscripción, enviar ese resumen a una cola RabbitMQ y posteriormente consumirlo desde un endpoint para guardarlo en una nueva tabla de Oracle Cloud.
+El sistema permite tomar una inscripción existente, generar su resumen a partir de la boleta de inscripción, enviarlo a RabbitMQ y consumirlo para guardarlo en la tabla RESUMEN_COMPRA_MQ de Oracle Cloud.
 
 El flujo implementado complementa la funcionalidad principal de inscripción, pago simulado y generación de resumen, agregando una comunicación asíncrona basada en mensajes.
 
@@ -51,12 +51,7 @@ Panel de administración:
 http://localhost:15672
 ```
 
-Credenciales configuradas para ambiente local:
-
-```text
-usuario: admin
-password: admin
-```
+Las credenciales se configuran mediante las variables de entorno `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD`. Los valores sensibles no se almacenan en el repositorio.
 
 ### Configuración Spring Boot
 
@@ -97,6 +92,12 @@ El sistema expone un endpoint para enviar el resumen de una inscripción existen
 POST /api/mq/inscripciones/{inscripcionId}/enviar-resumen
 ```
 
+En el flujo integrado, el BFF crea la inscripción y solicita el envío mediante:
+
+```http
+POST /api/bff/inscripciones
+```
+
 Este endpoint realiza las siguientes acciones:
 
 ```text
@@ -125,6 +126,12 @@ El sistema expone un endpoint para consumir un mensaje pendiente desde RabbitMQ 
 
 ```http
 POST /api/mq/resumenes/consumir
+```
+
+El acceso externo mediante el BFF utiliza:
+
+```http
+POST /api/bff/mq/resumenes/consumir
 ```
 
 Este endpoint realiza las siguientes acciones:
@@ -157,6 +164,12 @@ Para revisar los resúmenes ya persistidos en Oracle Cloud, la aplicación expon
 GET /api/mq/resumenes
 ```
 
+La consulta externa mediante el BFF utiliza:
+
+```http
+GET /api/bff/mq/resumenes
+```
+
 Este endpoint permite validar que los mensajes consumidos desde RabbitMQ fueron guardados correctamente en la base de datos.
 
 ## Tabla Oracle Cloud
@@ -184,7 +197,7 @@ FECHA_GUARDADO
 
 El campo `CONTENIDO_JSON` conserva el mensaje completo recibido desde RabbitMQ, incluyendo el detalle de los cursos inscritos.
 
-## Archivos principales modificados o agregados
+## Archivos principales
 
 ```text
 docker-compose.yml
@@ -237,8 +250,8 @@ Endpoint de consulta:
 GET /api/mq/resumenes
 ```
 
-## Resultado esperado
+## Resultado del flujo
 
-Con esta integración, la aplicación queda preparada para manejar el resumen de inscripción mediante una cola MQ, evitando que el proceso de persistencia del resumen dependa directamente del flujo inicial de inscripción.
+La aplicación maneja el resumen de inscripción mediante una cola MQ, evitando que su persistencia dependa directamente del flujo inicial de inscripción.
 
-El sistema mantiene la inscripción como operación principal y agrega RabbitMQ como mecanismo intermedio para transportar el resumen hacia una nueva persistencia en Oracle Cloud.
+El sistema mantiene la inscripción como operación principal y utiliza RabbitMQ para transportar el resumen hacia su persistencia en Oracle Cloud.

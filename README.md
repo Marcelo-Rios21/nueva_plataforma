@@ -4,23 +4,23 @@
 
 Este proyecto corresponde a una plataforma de aprendizaje en línea desarrollada con Spring Boot. La aplicación permite gestionar usuarios, cursos, inscripciones, evaluaciones, pagos y notificaciones mediante endpoints REST.
 
-El sistema está construido como una aplicación backend con arquitectura por capas, separando controladores, servicios, repositorios, modelos, DTO, configuración y manejo de errores. Además, se incluye una propuesta de arquitectura basada en microservicios para explicar cómo podría evolucionar el sistema en un entorno más escalable.
+Los servicios backend mantienen una arquitectura por capas, separando controladores, servicios, repositorios, modelos, DTO, configuración y manejo de errores. El sistema utiliza una arquitectura distribuida basada en microservicios, con API Gateway, BFF, autenticación mediante Microsoft Entra ID y despliegue mediante contenedores.
 
-En esta versión se incorpora integración con AWS S3 para almacenar archivos físicos asociados al resumen de inscripción. Esta funcionalidad permite generar, subir, descargar, modificar y eliminar el archivo del resumen desde un bucket en la nube.
+La plataforma utiliza AWS S3 para almacenar archivos físicos asociados al resumen de inscripción. Esta funcionalidad permite generar, subir, descargar, modificar y eliminar el archivo del resumen desde un bucket en la nube.
 
 ---
 
-## Arquitectura propuesta
+## Arquitectura
 
-Para cubrir los requerimientos del caso, se propone dividir la plataforma en los siguientes microservicios:
+La plataforma se compone de los siguientes servicios y componentes:
 
-- **Auth Service**: gestión de usuarios, roles y autenticación.
-- **Course Service**: gestión de cursos e inscripciones.
-- **Assignment and Evaluation Service**: gestión de evaluaciones, tareas y calificaciones.
-- **Payment Service**: gestión de pagos.
-- **Notification Service**: gestión de notificaciones.
+- **Microsoft Entra ID**: autenticación y emisión de tokens OAuth2/JWT.
+- **Curso Service**: gestión del catálogo y CRUD de cursos.
+- **Inscripciones Service**: gestión de inscripciones, evaluaciones, pagos, notificaciones, Oracle y AWS S3.
+- **BFF Service**: coordinación del flujo integrado de inscripción y mensajería.
+- **Frontend, API Gateway y Azure API Management**: interfaz web, seguridad y enrutamiento de solicitudes.
 
-La comunicación propuesta entre los servicios es mediante REST, usando JSON para el intercambio de datos.
+La comunicación entre los servicios utiliza REST con JSON y mensajería asíncrona mediante RabbitMQ.
 
 La explicación completa de la arquitectura y el diagrama se encuentran en:
 
@@ -32,9 +32,11 @@ docs/arquitectura_micro.md
 
 ## Tecnologías utilizadas
 
-- Java 17
+- Java 21
 - Spring Boot
 - Spring Web MVC
+- Spring Cloud Gateway
+- Spring Security y OAuth2 Resource Server
 - Spring Data JPA
 - Spring Boot Actuator
 - Spring AOP
@@ -45,10 +47,15 @@ docs/arquitectura_micro.md
 - Maven Wrapper
 - AWS S3
 - AWS SDK for Java
-- Docker
+- Spring AMQP
+- RabbitMQ
+- Docker y Docker Compose
 - Docker Hub
 - GitHub Actions
-- EC2
+- AWS EC2
+- Microsoft Entra ID
+- Azure API Management
+- Vite, JavaScript, MSAL y Nginx
 - Postman / PowerShell
 
 ---
@@ -163,7 +170,7 @@ src/main/java/com/duoc/LearningPlatformValidation/service/S3StorageService.java
 
 ## Ejecución del proyecto
 
-Compilar el proyecto:
+Compilar el servicio de inscripciones:
 
 ```bash
 ./mvnw clean compile
@@ -175,7 +182,7 @@ En Windows PowerShell:
 .\mvnw clean compile
 ```
 
-Ejecutar la aplicación:
+Ejecutar el servicio de inscripciones:
 
 ```bash
 ./mvnw spring-boot:run
@@ -187,11 +194,19 @@ En Windows PowerShell:
 .\mvnw spring-boot:run
 ```
 
-La aplicación queda disponible en:
+El servicio de inscripciones queda disponible en:
+
+```txt
+http://localhost:8081
+```
+
+El acceso unificado a los servicios se realiza mediante el API Gateway:
 
 ```txt
 http://localhost:8080
 ```
+
+Los servicios `curso-service`, `bff-service` y `api-gateway` se compilan desde sus respectivos directorios. El frontend se compila mediante `npm run build`.
 
 ---
 
@@ -227,6 +242,26 @@ POST   /api/inscripciones
 GET    /api/inscripciones/{id}/boleta
 DELETE /api/inscripciones/{id}
 ```
+
+### BFF
+
+```txt
+POST   /api/bff/inscripciones
+POST   /api/bff/mq/resumenes/consumir
+GET    /api/bff/mq/resumenes
+```
+
+El BFF coordina la creación de la inscripción y la publicación de su resumen en RabbitMQ.
+
+### Mensajería RabbitMQ
+
+```txt
+POST   /api/mq/inscripciones/{inscripcionId}/enviar-resumen
+POST   /api/mq/resumenes/consumir
+GET    /api/mq/resumenes
+```
+
+El productor publica el resumen en la cola y el consumidor lo guarda en Oracle Cloud.
 
 ### Resumen de inscripción y AWS S3
 
@@ -297,6 +332,14 @@ DELETE /api/notificaciones/{id}
 
 ## Ejemplo de flujo probado
 
+Las rutas protegidas requieren un token válido emitido por Microsoft Entra ID mediante la cabecera `Authorization: Bearer <token>`. Los valores sensibles no se almacenan en el repositorio.
+
+```powershell
+$headers = @{
+    Authorization = "Bearer <token>"
+}
+```
+
 ### 1. Crear usuario
 
 ```powershell
@@ -307,7 +350,7 @@ $body = @{
     rol = "ESTUDIANTE"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:8080/api/usuarios" -Method Post -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://localhost:8080/api/usuarios" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 ### 2. Crear curso
@@ -320,7 +363,7 @@ $body = @{
     costo = 50000
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:8080/api/cursos" -Method Post -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://localhost:8080/api/cursos" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 ### 3. Crear inscripción
@@ -332,19 +375,19 @@ $body = @{
     metodoPago = "TARJETA"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones" -Method Post -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://localhost:8080/api/bff/inscripciones" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 ### 4. Descargar resumen como archivo físico
 
 ```powershell
-Invoke-WebRequest -Uri "http://localhost:8080/api/inscripciones/1/resumen/archivo" -OutFile "resumen-inscripcion-1.txt"
+Invoke-WebRequest -Uri "http://localhost:8080/api/inscripciones/1/resumen/archivo" -Headers $headers -OutFile "resumen-inscripcion-1.txt"
 ```
 
 ### 5. Subir resumen a S3
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3" -Method Post
+Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3" -Method Post -Headers $headers
 ```
 
 Respuesta esperada:
@@ -358,7 +401,7 @@ resumen-inscripcion-BOL-00001.txt BOL-00001     Resumen de inscripción subido c
 ### 6. Descargar resumen desde S3
 
 ```powershell
-Invoke-WebRequest -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3/download" -OutFile "resumen-descargado-s3.txt"
+Invoke-WebRequest -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3/download" -Headers $headers -OutFile "resumen-descargado-s3.txt"
 ```
 
 ### 7. Modificar resumen en S3
@@ -383,13 +426,13 @@ Estado de pago: APROBADO_SIMULADO
 Observacion: Archivo modificado correctamente desde el endpoint PUT.
 "@
 
-Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3" -Method Put -ContentType "text/plain; charset=utf-8" -Body $nuevoContenido
+Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3" -Method Put -Headers $headers -ContentType "text/plain; charset=utf-8" -Body $nuevoContenido
 ```
 
 ### 8. Eliminar resumen desde S3
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3" -Method Delete
+Invoke-RestMethod -Uri "http://localhost:8080/api/inscripciones/1/resumen/s3" -Method Delete -Headers $headers
 ```
 
 ---
@@ -436,12 +479,12 @@ El proyecto cuenta con un pipeline de GitHub Actions que automatiza:
 
 1. Descarga del código fuente.
 2. Configuración de Java 21.
-3. Compilación del proyecto Spring Boot usando Maven Wrapper.
-4. Construcción de imagen Docker.
+3. Compilación de los servicios Spring Boot usando Maven Wrapper.
+4. Construcción de las imágenes Docker del API Gateway, BFF, cursos, inscripciones y frontend.
 5. Inicio de sesión en Docker Hub.
-6. Publicación de imagen en Docker Hub.
+6. Publicación de las imágenes en Docker Hub.
 7. Despliegue en una instancia EC2 mediante SSH.
-8. Ejecución del contenedor con variables de entorno.
+8. Despliegue de los servicios mediante Docker Compose con variables de entorno y secretos.
 
 El pipeline utiliza:
 
@@ -453,7 +496,7 @@ docker/login-action
 
 El uso de `docker/login-action` permite reemplazar el login manual a Docker Hub por una acción oficial, dejando el pipeline más ordenado y alineado con buenas prácticas.
 
-Actualmente se utiliza:
+El pipeline empaqueta los servicios utilizando:
 
 ```txt
 -DskipTests
@@ -463,9 +506,9 @@ Actualmente se utiliza:
 
 ## Docker
 
-El proyecto incluye un `Dockerfile` para construir y ejecutar la aplicación en contenedor.
+El proyecto incluye un `Dockerfile` para cada servicio desplegable: inscripciones, cursos, BFF, API Gateway y frontend.
 
-El despliegue en EC2 ejecuta el contenedor usando variables de entorno para la conexión a la base de datos y la configuración de la aplicación.
+El despliegue en EC2 utiliza `docker-compose.prod.yml` para ejecutar los servicios, RabbitMQ y la red interna, usando variables de entorno para Oracle, AWS S3, Microsoft Entra ID y la comunicación entre contenedores.
 
 Además, se utiliza:
 
@@ -473,7 +516,7 @@ Además, se utiliza:
 --restart unless-stopped
 ```
 
-Esto permite que el servicio se reinicie automáticamente si el contenedor se detiene o si la instancia se reinicia.
+Esto permite que los servicios se reinicien automáticamente si un contenedor se detiene o si la instancia EC2 se reinicia.
 
 ---
 
@@ -535,7 +578,7 @@ También se manejan errores de solicitud inválida y errores generales del servi
 
 | Requerimiento | Estado en el proyecto |
 |---|---|
-| Usuarios y autenticación | Se implementa gestión base de usuarios y se propone Auth Service en la arquitectura. |
+| Usuarios y autenticación | Implementado con Microsoft Entra ID, OAuth2, JWT y Spring Security. |
 | Gestión de cursos | Implementado mediante CRUD de cursos. |
 | Inscripción en cursos | Implementado mediante módulo de inscripciones. |
 | Generación de resumen de inscripción | Implementado mediante endpoint de boleta/resumen. |
@@ -548,7 +591,12 @@ También se manejan errores de solicitud inválida y errores generales del servi
 | Evaluaciones | Implementado mediante módulo de evaluaciones. |
 | Pagos | Implementado mediante módulo de pagos con estados. |
 | Notificaciones | Implementado mediante módulo de notificaciones. |
-| Comunicación entre microservicios | Propuesta documentada usando REST. |
-| CI/CD con GitHub Actions, Docker Hub y EC2 | Implementado. |
+| Comunicación entre microservicios | Implementada mediante REST, API Gateway, BFF y mensajería RabbitMQ. |
+| API Gateway y BFF | Implementados para centralizar el acceso y coordinar el flujo de inscripción. |
+| Azure API Management | Implementado como acceso externo protegido con validación de tokens JWT. |
+| Mensajería asíncrona | Implementada con productor, consumidor y cola RabbitMQ para resúmenes de inscripción. |
+| Persistencia de mensajes | Implementada en Oracle Cloud mediante la tabla de resúmenes consumidos. |
+| Frontend SPA | Implementado con Vite, JavaScript y autenticación mediante MSAL. |
+| CI/CD con GitHub Actions, Docker Hub y EC2 | Implementado para construir y publicar cinco imágenes y desplegarlas mediante Docker Compose. |
 
 ---

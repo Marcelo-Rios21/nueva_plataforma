@@ -1,0 +1,93 @@
+SET SERVEROUTPUT ON;
+SET PAGESIZE 100;
+SET LINESIZE 220;
+
+PROMPT ============================================================
+PROMPT 1. TABLAS DE LA PLATAFORMA
+PROMPT ============================================================
+
+SELECT TABLE_NAME
+FROM USER_TABLES
+WHERE TABLE_NAME IN (
+    'USUARIOS',
+    'CURSOS',
+    'INSCRIPCIONES',
+    'INSCRIPCION_CURSOS',
+    'EVALUACIONES',
+    'PAGOS',
+    'NOTIFICACION',
+    'RESUMEN_COMPRA_MQ'
+)
+ORDER BY TABLE_NAME;
+
+PROMPT
+PROMPT ============================================================
+PROMPT 2. CANTIDAD DE REGISTROS
+PROMPT ============================================================
+
+SELECT 'USUARIOS' AS TABLA, COUNT(*) AS REGISTROS
+FROM USUARIOS
+UNION ALL
+SELECT 'CURSOS', COUNT(*)
+FROM CURSOS
+UNION ALL
+SELECT 'INSCRIPCIONES', COUNT(*)
+FROM INSCRIPCIONES
+UNION ALL
+SELECT 'INSCRIPCION_CURSOS', COUNT(*)
+FROM INSCRIPCION_CURSOS
+UNION ALL
+SELECT 'EVALUACIONES', COUNT(*)
+FROM EVALUACIONES
+UNION ALL
+SELECT 'PAGOS', COUNT(*)
+FROM PAGOS
+UNION ALL
+SELECT 'NOTIFICACION', COUNT(*)
+FROM NOTIFICACION
+UNION ALL
+SELECT 'RESUMEN_COMPRA_MQ', COUNT(*)
+FROM RESUMEN_COMPRA_MQ;
+
+PROMPT
+PROMPT ============================================================
+PROMPT 3. COLUMNAS DE RESUMEN_COMPRA_MQ
+PROMPT ============================================================
+
+SELECT
+    COLUMN_ID,
+    COLUMN_NAME,
+    DATA_TYPE,
+    DATA_LENGTH,
+    DATA_PRECISION,
+    DATA_SCALE,
+    NULLABLE
+FROM USER_TAB_COLUMNS
+WHERE TABLE_NAME = 'RESUMEN_COMPRA_MQ'
+ORDER BY COLUMN_ID;
+
+PROMPT
+PROMPT ============================================================
+PROMPT 4. ULTIMOS RESUMENES CONSUMIDOS DESDE RABBITMQ
+PROMPT ============================================================
+
+SELECT *
+FROM (
+    SELECT
+        ID,
+        INSCRIPCION_ID,
+        ESTUDIANTE_ID,
+        NUMERO_RESUMEN,
+        TOTAL,
+        METODO_PAGO,
+        ESTADO_PAGO,
+        FECHA_GUARDADO
+    FROM RESUMEN_COMPRA_MQ
+    ORDER BY FECHA_GUARDADO DESC
+)
+WHERE ROWNUM <= 20;
+
+PROMPT
+PROMPT ============================================================
+PROMPT VALIDACION FINALIZADA
+PROMPT ============================================================
